@@ -1055,6 +1055,8 @@
             {#if !scriptureDisplay.canUseSecondary}
                 <span class="scripture-display-status">Secondary unavailable</span>
             {/if}
+
+            <span class="scripture-reference-shortcut" data-title="Focus Scripture reference entry [Ctrl+Shift+B]">Reference entry: Ctrl/Cmd+Shift+B</span>
         </div>
     {/if}
 
@@ -1356,6 +1358,14 @@
         font-size: 0.85em;
         white-space: nowrap;
         padding: 0 6px;
+    }
+    .scripture-reference-shortcut {
+        color: var(--text);
+        opacity: 0.55;
+        font-size: 0.78em;
+        white-space: nowrap;
+        padding: 0 6px;
+        margin-left: auto;
     }
     .scripture-recent-controls {
         display: flex;
