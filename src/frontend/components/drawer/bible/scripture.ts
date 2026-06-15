@@ -23,6 +23,7 @@ import { history } from "../../helpers/history"
 import { getMediaStyle } from "../../helpers/media"
 import { getAllNormalOutputs, getFirstActiveOutput, setOutput } from "../../helpers/output"
 import { checkName } from "../../helpers/show"
+import { resolveScriptureDisplay, usesActiveScriptureCollection } from "./scriptureDisplay"
 
 const SCRIPTURE_API_URL = "https://api.churchapps.org/content/bibles"
 
@@ -116,8 +117,12 @@ async function getLocalBible(id: string) {
 
 export async function getActiveScripturesContent(selectedVerses: (number | string)[][] | null = null) {
     const tabId = get(drawerTabsData).scripture?.activeSubTab || ""
-    const selectedScriptureData = get(scriptures)[tabId]
-    if (!selectedScriptureData) return null
+    const allScriptures = get(scriptures)
+    const displaySelection = resolveScriptureDisplay(get(scriptureSettings), allScriptures, tabId)
+    const currentScriptures = displaySelection.ids
+    const selectedScriptureData = allScriptures[tabId] || allScriptures[currentScriptures[0]]
+    if (!selectedScriptureData || !currentScriptures.length) return null
+    const useActiveCollection = usesActiveScriptureCollection(get(scriptureSettings), allScriptures, tabId)
 
     const active = get(activeScripture).reference
 
@@ -130,8 +135,6 @@ export async function getActiveScripturesContent(selectedVerses: (number | strin
     }
 
     if (!selectedVerses[0]?.length) return null
-
-    const currentScriptures = selectedScriptureData.collection?.versions || [tabId]
 
     return (await Promise.all(
         currentScriptures
@@ -175,7 +178,7 @@ export async function getActiveScripturesContent(selectedVerses: (number | strin
                 })
 
                 const offsetId = `${id}-${active?.book}-${active?.chapters[0]}`
-                const offsets = selectedScriptureData?.collection?.offsets || {}
+                const offsets = useActiveCollection ? selectedScriptureData?.collection?.offsets || {} : {}
                 const offset = offsets[offsetId] || 0
 
                 const splitLongVerses = get(scriptureSettings).splitLongVerses
@@ -243,6 +246,12 @@ export async function getActiveScripturesContent(selectedVerses: (number | strin
             })
             .filter(Boolean)
     )) as BibleContent[]
+}
+
+function getScriptureSourceId(biblesContent: BibleContent[]) {
+    const tabId = get(drawerTabsData).scripture?.activeSubTab || ""
+    const useActiveCollection = usesActiveScriptureCollection(get(scriptureSettings), get(scriptures), tabId)
+    return useActiveCollection ? tabId : biblesContent[0]?.id || tabId
 }
 
 // Sort verses by numeric verse id and subverse (e.g. "2_0", "2_1") so mixed
@@ -318,7 +327,7 @@ export async function playScripture() {
     const settings = { backgroundColor: _template.getSetting("backgroundColor") }
 
     const tempItems: Item[] = slides[0] || []
-    const categoryId = get(drawerTabsData).scripture?.activeSubTab || ""
+    const categoryId = getScriptureSourceId(biblesContent)
 
     const [previousSlides, nextSlides] = await Promise.all([getPreviousSlides(), getNextSlides()])
 
@@ -1858,7 +1867,7 @@ export async function getScriptureShow(biblesContent: BibleContent[] | null) {
     show.reference = {
         type: "scripture",
         data: {
-            collection: get(drawerTabsData).scripture?.activeSubTab || biblesContent[0].id || "",
+            collection: getScriptureSourceId(biblesContent),
             translations: biblesContent.length,
             version: versions,
             api: biblesContent[0].isApi,

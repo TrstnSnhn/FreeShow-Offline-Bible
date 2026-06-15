@@ -1,6 +1,4 @@
 <script lang="ts">
-    import JSONBible from "json-bible"
-    import { ApiBible } from "json-bible/lib/api"
     import type { Verse } from "json-bible/lib/Bible"
     import type { VerseReference } from "json-bible/lib/reference"
     import { onMount } from "svelte"
@@ -16,26 +14,36 @@
     import InputRow from "../../input/InputRow.svelte"
     import MaterialButton from "../../inputs/MaterialButton.svelte"
     import MaterialCheckbox from "../../inputs/MaterialCheckbox.svelte"
+    import MaterialDropdown from "../../inputs/MaterialDropdown.svelte"
     import MaterialNumberInput from "../../inputs/MaterialNumberInput.svelte"
     import TextInput from "../../inputs/TextInput.svelte"
     import Loader from "../../main/Loader.svelte"
     import Center from "../../system/Center.svelte"
     import { createScriptureShow, formatBibleText, getVerseIdParts, getVersePartLetter, joinRange, loadJsonBible, moveSelection, outputIsScripture, playScripture, scriptureRangeSelect, sortScriptureSelection, splitText, swapPreviewBible } from "./scripture"
+    import { getBibleOptions, resolveScriptureDisplay, scriptureDisplayModeOptions, usesActiveScriptureCollection } from "./scriptureDisplay"
+    import type { ScriptureDisplayMode } from "./scriptureDisplay"
     import { brightenDarkColor, fadeColor } from "../../helpers/color"
 
     export let active: string | null
     export let searchValue: string
 
     $: activeScriptureId = active || ""
-    $: activeScriptures = [activeScriptureId]
-    $: if ($scriptures[activeScriptureId]?.collection?.versions) activeScriptures = $scriptures[activeScriptureId].collection.versions
+    $: scriptureBibleOptions = getBibleOptions($scriptures)
+    $: scriptureDisplay = resolveScriptureDisplay($scriptureSettings, $scriptures, activeScriptureId)
+    $: usingActiveCollection = usesActiveScriptureCollection($scriptureSettings, $scriptures, activeScriptureId)
+    $: activeScriptures = scriptureDisplay.ids.length ? scriptureDisplay.ids : [activeScriptureId].filter(Boolean)
 
-    $: previewBibleIndex = $scriptures[activeScriptureId]?.collection?.previewIndex || 0
+    $: previewBibleIndex = usingActiveCollection ? $scriptures[activeScriptureId]?.collection?.previewIndex || 0 : 0
     $: previewBibleId = activeScriptures[previewBibleIndex] || activeScriptures[0]
     $: previewBibleData = clone($scriptures[previewBibleId] || null)
 
     $: isApi = !!previewBibleData?.api
     $: isCollection = activeScriptures.length > 1
+    $: displayModeValue = usingActiveCollection ? scriptureDisplay.mode : $scriptureSettings.displayMode || "primary"
+    $: displayModeOptions = scriptureDisplayModeOptions.map((option) => ({
+        ...option,
+        label: !scriptureDisplay.canUseSecondary && option.value !== "primary" ? `${option.label} (unavailable)` : option.label
+    }))
 
     // custom data
     $: if (previewBibleData?.copyright) previewBibleData.metadata = { ...(previewBibleData.metadata || {}), copyright: previewBibleData.copyright }
@@ -65,6 +73,25 @@
         } catch (err) {
             console.error("Error loading collection scripture:", id, err)
         }
+    }
+
+    function updatePrimaryBible(value: string) {
+        scriptureSettings.update((settings) => ({
+            ...settings,
+            primaryBible: value,
+            secondaryBible: value && settings.secondaryBible === value ? "" : settings.secondaryBible
+        }))
+    }
+
+    function updateSecondaryBible(value: string) {
+        scriptureSettings.update((settings) => ({
+            ...settings,
+            secondaryBible: value && settings.primaryBible === value ? "" : value
+        }))
+    }
+
+    function updateDisplayMode(value: ScriptureDisplayMode) {
+        scriptureSettings.update((settings) => ({ ...settings, displayMode: value }))
     }
 
     // Track what book/chapter each scripture's data is loaded for
@@ -177,7 +204,7 @@
         verses: $activeScripture.reference?.verses || []
     }
 
-    type BibleReturn = Awaited<ReturnType<typeof JSONBible>> | Awaited<ReturnType<typeof ApiBible>>
+    type BibleReturn = NonNullable<Awaited<ReturnType<typeof loadJsonBible>>>
     type TBook = Awaited<ReturnType<BibleReturn["getBook"]>>
     type TChapter = Awaited<ReturnType<TBook["getChapter"]>>
     type TVerse = ReturnType<TChapter["getVerses"]>
@@ -202,7 +229,8 @@
 
     // Check if any translation in collection supports splitting for verses
     function checkCollectionSplitSupport(): { [verseNumber: number]: number } {
-        if (!isCollection || !$scriptureSettings.splitLongVerses || !verses) return {}
+        const currentVerses = verses
+        if (!isCollection || !$scriptureSettings.splitLongVerses || !currentVerses) return {}
 
         const splitCounts: { [verseNumber: number]: number } = {}
 
@@ -210,7 +238,7 @@
             const chapterData = data[scriptureId]?.chapterData
             if (!chapterData) return
 
-            verses.forEach((verse) => {
+            currentVerses.forEach((verse) => {
                 try {
                     const verseObj = chapterData.getVerse(verse.number)
                     const fullText = verseObj.getHTML() || verseObj?.data?.text || ""
@@ -971,7 +999,7 @@
 
     // OFFSETS
 
-    $: useOffset = Object.keys($scriptures[activeScriptureId]?.collection?.offsets || {}).length > 0
+    $: useOffset = usingActiveCollection && Object.keys($scriptures[activeScriptureId]?.collection?.offsets || {}).length > 0
     function updateOffset(scriptureId: string, value: number) {
         const offsetId = `${scriptureId}-${activeReference.book}-${activeReference.chapters[0]}`
 
@@ -989,7 +1017,7 @@
     function getOffset(scriptureId: string, _updater: any = null) {
         const offsetId = `${scriptureId}-${activeReference.book}-${activeReference.chapters[0]}`
 
-        const offsets = $scriptures[activeScriptureId]?.collection?.offsets || {}
+        const offsets = usingActiveCollection ? $scriptures[activeScriptureId]?.collection?.offsets || {} : {}
         return offsets[offsetId] || 0
     }
 </script>
@@ -997,6 +1025,18 @@
 <svelte:window on:keydown={keydown} on:mouseup={mouseup} />
 
 <div class="scroll" style="flex: 1;overflow-y: auto;">
+    {#if scriptureBibleOptions.length}
+        <div class="scripture-display-controls">
+            <MaterialDropdown label="Primary Bible" value={$scriptureSettings.primaryBible || ""} options={scriptureBibleOptions} allowEmpty on:change={(e) => updatePrimaryBible(e.detail)} />
+            <MaterialDropdown label="Secondary Bible" value={$scriptureSettings.secondaryBible || ""} options={scriptureBibleOptions} allowEmpty disabled={scriptureBibleOptions.length < 2} on:change={(e) => updateSecondaryBible(e.detail)} />
+            <MaterialDropdown label="Display" value={displayModeValue} options={displayModeOptions} on:change={(e) => updateDisplayMode(e.detail)} />
+
+            {#if !scriptureDisplay.canUseSecondary}
+                <span class="scripture-display-status">Secondary unavailable</span>
+            {/if}
+        </div>
+    {/if}
+
     <div class="main scripture">
         {#if !previewBibleId || $notFound.bible?.includes(previewBibleId) || !$scriptures[previewBibleId] || apiError}
             <Center faded>
@@ -1092,7 +1132,7 @@
                         {/if}
                     </div>
                     <div class="verses context #scripture_verse" class:showFloatingButtons={$resized.rightPanelDrawer > 5 && splittedVerses.length > 10} bind:this={versesScrollElem} class:center={!splittedVerses.length}>
-                        {#if isCollection && useOffset && splittedVerses.length}
+                        {#if usingActiveCollection && isCollection && useOffset && splittedVerses.length}
                             <InputRow style="width: 100%;margin-bottom: 5px;">
                                 {#each activeScriptures as scriptureId, i}
                                     {@const scripture = $scriptures[scriptureId]}
@@ -1175,7 +1215,7 @@
                 <!-- swap translation preview in collections -->
                 {#if isCollection && $scriptureSettings.showAllVersions}
                     <!--  -->
-                {:else if isCollection}
+                {:else if isCollection && usingActiveCollection}
                     <MaterialButton icon="refresh" on:click={() => swapPreviewBible(activeScriptureId)} title={$scriptures[activeScriptures[(previewBibleIndex + 1) % activeScriptures.length]]?.name || ""} style="padding-right: 0.2em;font-weight: normal;">
                         {#if isApi}<Icon id="web" style="margin: 0 5px;" size={0.8} white />{/if}
                         {previewBibleData.name}:
@@ -1198,7 +1238,9 @@
                             small
                         />
 
-                        <MaterialCheckbox label="edit.offset" checked={useOffset} on:change={(e) => (useOffset = e.detail)} small />
+                        {#if usingActiveCollection}
+                            <MaterialCheckbox label="edit.offset" checked={useOffset} on:change={(e) => (useOffset = e.detail)} small />
+                        {/if}
                     {/if}
 
                     <!-- WIP had some issues with selecting multiple verses -->
@@ -1260,6 +1302,30 @@
 {/if}
 
 <style>
+    .scripture-display-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding: 8px;
+        border-bottom: 2px solid var(--primary-lighter);
+        position: relative;
+        overflow: visible;
+        z-index: 5;
+    }
+    .scripture-display-controls :global(.textfield) {
+        flex: 1 1 160px;
+        min-width: 150px;
+        max-width: 260px;
+    }
+    .scripture-display-status {
+        color: var(--text);
+        opacity: 0.65;
+        font-size: 0.85em;
+        white-space: nowrap;
+        padding: 0 6px;
+    }
+
     .main {
         display: flex;
         height: 100%;

@@ -139,7 +139,10 @@ export const defaultSyncedSettings: { [key in SaveListSyncedSettings]: any } = {
         verseNumbers: true,
         showVersion: false,
         showVerse: true,
-        referenceDivider: ":"
+        referenceDivider: ":",
+        primaryBible: "",
+        secondaryBible: "",
+        displayMode: "primary"
     },
     groups: defaultGroups,
     midiIn: {},

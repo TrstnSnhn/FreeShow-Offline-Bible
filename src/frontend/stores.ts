@@ -310,7 +310,10 @@ export const scriptureSettings: Writable<any> = writable({
     longVersesChars: 100,
     longVersesTolerance: 0,
     splitLongVersesSuffix: false,
-    smartSplit: true
+    smartSplit: true,
+    primaryBible: "",
+    secondaryBible: "",
+    displayMode: "primary"
 }) // {default}
 
 // DRAWER
