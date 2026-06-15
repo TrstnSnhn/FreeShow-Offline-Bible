@@ -24,6 +24,7 @@
     import type { ScriptureDisplayMode } from "./scriptureDisplay"
     import { getRecentScriptureHistory } from "./scriptureHistory"
     import type { ScriptureHistoryItem } from "./scriptureHistory"
+    import { shouldFocusScriptureReferenceInput } from "./scriptureShortcuts"
     import { brightenDarkColor, fadeColor } from "../../helpers/color"
 
     export let active: string | null
@@ -889,6 +890,13 @@
                 setTimeout(() => (searchInput.selectionStart = searchInput.selectionEnd = 100))
             }
 
+            return
+        }
+
+        if (shouldFocusScriptureReferenceInput(e)) {
+            e.preventDefault()
+            activeTriggerFunction.set("drawer_search")
+            setTimeout(() => activeTriggerFunction.set(""))
             return
         }
 
