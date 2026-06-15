@@ -22,6 +22,8 @@
     import { createScriptureShow, formatBibleText, getVerseIdParts, getVersePartLetter, joinRange, loadJsonBible, moveSelection, outputIsScripture, playScripture, scriptureRangeSelect, sortScriptureSelection, splitText, swapPreviewBible } from "./scripture"
     import { getBibleOptions, resolveScriptureDisplay, scriptureDisplayModeOptions, usesActiveScriptureCollection } from "./scriptureDisplay"
     import type { ScriptureDisplayMode } from "./scriptureDisplay"
+    import { getRecentScriptureHistory } from "./scriptureHistory"
+    import type { ScriptureHistoryItem } from "./scriptureHistory"
     import { brightenDarkColor, fadeColor } from "../../helpers/color"
 
     export let active: string | null
@@ -477,6 +479,17 @@
 
     let historyOpened = false
     $: currentHistory = clone($scriptureHistory.filter((a) => a.id === previewBibleId)).reverse()
+    $: compactRecentHistory = getRecentScriptureHistory($scriptureHistory, 5)
+
+    async function openRecentHistoryItem(verse: ScriptureHistoryItem) {
+        if (verse.book === undefined || verse.chapter === undefined || !verse.verse?.length) return
+
+        resetContentSearch()
+        historyOpened = false
+        playWhenLoaded = true
+        const opened = await openBook(verse.book, [verse.chapter], [verse.verse])
+        if (!opened) playWhenLoaded = false
+    }
 
     /// AUTOSCROLL ///
 
@@ -1037,6 +1050,17 @@
         </div>
     {/if}
 
+    {#if compactRecentHistory.length}
+        <div class="scripture-recent-controls" aria-label="Recent Scripture">
+            <span class="scripture-recent-label">Recent</span>
+            {#each compactRecentHistory as verse}
+                <button type="button" class="scripture-recent-button" title={verse.reference || ""} on:click={() => openRecentHistoryItem(verse)}>
+                    {verse.reference || ""}
+                </button>
+            {/each}
+        </div>
+    {/if}
+
     <div class="main scripture">
         {#if !previewBibleId || $notFound.bible?.includes(previewBibleId) || !$scriptures[previewBibleId] || apiError}
             <Center faded>
@@ -1324,6 +1348,39 @@
         font-size: 0.85em;
         white-space: nowrap;
         padding: 0 6px;
+    }
+    .scripture-recent-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--primary-lighter);
+    }
+    .scripture-recent-label {
+        color: var(--text);
+        opacity: 0.65;
+        font-size: 0.78em;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .scripture-recent-button {
+        border: 1px solid var(--primary-lighter);
+        background: var(--primary-darkest);
+        color: var(--text);
+        border-radius: 4px;
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.82em;
+        max-width: 150px;
+        overflow: hidden;
+        padding: 4px 8px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .scripture-recent-button:hover,
+    .scripture-recent-button:focus-visible {
+        background: var(--hover);
     }
 
     .main {

@@ -24,6 +24,7 @@ import { getMediaStyle } from "../../helpers/media"
 import { getAllNormalOutputs, getFirstActiveOutput, setOutput } from "../../helpers/output"
 import { checkName } from "../../helpers/show"
 import { resolveScriptureDisplay, usesActiveScriptureCollection } from "./scriptureDisplay"
+import { addScriptureHistoryItem } from "./scriptureHistory"
 
 const SCRIPTURE_API_URL = "https://api.churchapps.org/content/bibles"
 
@@ -303,11 +304,7 @@ export async function playScripture() {
         }
         // WIP multiple verses, play from another version
 
-        const existingIndex = a.findIndex((a) => JSON.stringify(a) === JSON.stringify(newItem))
-        if (existingIndex > -1) a.splice(existingIndex, 1)
-        a.push(newItem)
-
-        return a
+        return addScriptureHistoryItem(a, newItem)
     })
 
     const templateId = getScriptureTemplateId()
